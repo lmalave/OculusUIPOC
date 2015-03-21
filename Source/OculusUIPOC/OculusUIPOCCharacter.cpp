@@ -1,10 +1,18 @@
 // Copyright 1998-2015 Epic Games, Inc. All Rights Reserved.
 
 #include "OculusUIPOC.h"
-#include "OculusUIPOCCharacter.h"
-#include "OculusUIPOCProjectile.h"
 #include "Animation/AnimInstance.h"
-#include "GameFramework/InputSettings.h"
+#include "CoherentUIComponent.h"
+#include "Engine.h"
+#include "IHeadMountedDisplay.h"
+#include "Leap.h"
+#include <math.h> 
+#include "OculusUIPOCCharacter.h"
+#include "OculusUIPOCPlayerController.h"
+#include "OculusUIPOCProjectile.h"
+#include "Runtime/Core/Public/Misc/DateTime.h"
+#include <string>
+#include "UISurfaceActor.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
 
@@ -40,6 +48,13 @@ AOculusUIPOCCharacter::AOculusUIPOCCharacter(const FObjectInitializer& ObjectIni
 
 	// Note: The ProjectileClass and the skeletal mesh/anim blueprints for Mesh1P are set in the
 	// derived blueprint asset named MyCharacter (to avoid direct content references in C++)
+
+	// enable tick
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = true;
+
+	RaytraceInputEnable = true;
+	LeapEnable = true;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -208,4 +223,71 @@ bool AOculusUIPOCCharacter::EnableTouchscreenMovement(class UInputComponent* Inp
 		InputComponent->BindTouch(EInputEvent::IE_Repeat, this, &AOculusUIPOCCharacter::TouchUpdate);
 	}
 	return bResult;
+}
+
+void AOculusUIPOCCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	UISurfaceRaytraceHandler->HandleRaytrace();
+	HandleLeap();
+
+}
+
+void AOculusUIPOCCharacter::HandleLeap() {
+
+	if (LeapEnable == true) {
+		LeapInput->UpdateHandLocations();
+		// first handle movement
+		FVector MovementHandPalmLocation_CharacterSpace = LeapInput->GetLeftPalmLocation_CharacterSpace();
+		FVector MovementHandFingerLocation_CharacterSpace = LeapInput->GetLeftFingerLocation_CharacterSpace();
+		VirtualJoystick->CalculateMovementFromHandLocation(MovementHandPalmLocation_CharacterSpace, MovementHandFingerLocation_CharacterSpace);
+		MoveForward(VirtualJoystick->GetForwardMovement());
+		MoveRight(VirtualJoystick->GetRightMovement());
+		TurnAtRate(VirtualJoystick->GetTurnRate());
+
+		// next handle UI input
+		ActionHandPalmLocation = LeapInput->GetRightPalmLocation_WorldSpace();
+		ActionHandFingerLocation = LeapInput->GetRightFingerLocation_WorldSpace();
+		AUISurfaceActor* SelectedUISurface = UISurfaceRaytraceHandler->GetSelectedUISurfaceActor();
+		if (SelectedUISurface && SelectedUISurface->CoherentUIComponent && SelectedUISurface->CoherentUIComponent->GetView()) {
+			SelectedUISurface->HandleVirtualTouchInput(ActionHandPalmLocation, ActionHandFingerLocation);
+		}
+	}
+}
+
+FRotator AOculusUIPOCCharacter::GetViewRotation() const
+{
+	if (AOculusUIPOCPlayerController* MYPC = Cast<AOculusUIPOCPlayerController>(Controller))
+	{
+		return MYPC->GetViewRotation();
+	}
+	else if (Role < ROLE_Authority)
+	{
+		// check if being spectated
+		for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator; ++Iterator)
+		{
+			APlayerController* PlayerController = *Iterator;
+			if (PlayerController && PlayerController->PlayerCameraManager->GetViewTargetPawn() == this)
+			{
+				return PlayerController->BlendedTargetViewRotation;
+			}
+		}
+	}
+
+	return GetActorRotation();
+}
+
+void AOculusUIPOCCharacter::ResetHMD()
+{
+	GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, TEXT("================================================Resetting HMD"));
+	GEngine->HMDDevice->ResetOrientationAndPosition(0.0);
+}
+
+void AOculusUIPOCCharacter::BeginPlay() {
+	LeapController = new Leap::Controller();
+	LeapController->setPolicy(Leap::Controller::POLICY_OPTIMIZE_HMD);
+	LeapInput = new LeapInputReader(LeapController, this);
+	VirtualJoystick = new VirtualJoystick3D(this);
+	UISurfaceRaytraceHandler = new UISurfaceRaytraceInputHandler(this, FirstPersonCameraComponent);
 }

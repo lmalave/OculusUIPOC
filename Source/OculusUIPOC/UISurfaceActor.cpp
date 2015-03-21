@@ -231,8 +231,9 @@ FVector AUISurfaceActor::GetViewPixelCoordinatesFromActorLocation(FVector ActorL
 	FVector* ViewPixelCoordinates = new FVector();
 	float NormalizedUIViewX = (ActorLocation.X + 50.0) / 100.0;
 	float NormalizedUIViewY = (ActorLocation.Y + 50.0) / 100.0;
-	ViewPixelCoordinates->X = NormalizedUIViewX * CoherentUIComponent->GetView()->GetWidth();
-	ViewPixelCoordinates->Y = NormalizedUIViewY * CoherentUIComponent->GetView()->GetHeight();
+	Coherent::UI::View* UIView = CoherentUIComponent->GetView();
+	ViewPixelCoordinates->X = NormalizedUIViewX * UIView->GetWidth();
+	ViewPixelCoordinates->Y = NormalizedUIViewY * UIView->GetHeight();
 	ViewPixelCoordinates->Z = 0.0;
 	return *ViewPixelCoordinates;
 }

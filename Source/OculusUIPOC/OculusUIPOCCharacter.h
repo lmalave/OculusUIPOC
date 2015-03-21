@@ -1,6 +1,11 @@
 // Copyright 1998-2015 Epic Games, Inc. All Rights Reserved.
 #pragma once
 #include "GameFramework/Character.h"
+#include "Leap.h"
+#include "LeapInputReader.h"
+#include "UISurfaceRaytraceInputHandler.h"
+#include "VirtualJoystick3D.h"
+#include "Runtime/Core/Public/Misc/DateTime.h"
 #include "OculusUIPOCCharacter.generated.h"
 
 class UInputComponent;
@@ -17,6 +22,15 @@ class AOculusUIPOCCharacter : public ACharacter
 	/** First person camera */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 	class UCameraComponent* FirstPersonCameraComponent;
+
+	Leap::Controller* LeapController;
+
+	LeapInputReader* LeapInput;
+
+	VirtualJoystick3D* VirtualJoystick;
+
+	UISurfaceRaytraceInputHandler* UISurfaceRaytraceHandler;
+
 public:
 	AOculusUIPOCCharacter(const FObjectInitializer& ObjectInitializer);
 
@@ -43,6 +57,24 @@ public:
 	/** AnimMontage to play each time we fire */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
 	class UAnimMontage* FireAnimation;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Leap)
+		bool LeapEnable;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Raytrace)
+		bool RaytraceInputEnable;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = CoherentUI)
+		FVector MovementHandPalmLocation;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = CoherentUI)
+		FVector MovementHandFingerLocation;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = CoherentUI)
+		FVector ActionHandPalmLocation;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = CoherentUI)
+		FVector ActionHandFingerLocation;
 
 protected:
 	
@@ -93,11 +125,21 @@ protected:
 	 */
 	bool EnableTouchscreenMovement(UInputComponent* InputComponent);
 
+	void HandleLeap();
+
 public:
 	/** Returns Mesh1P subobject **/
 	FORCEINLINE class USkeletalMeshComponent* GetMesh1P() const { return Mesh1P; }
 	/** Returns FirstPersonCameraComponent subobject **/
 	FORCEINLINE class UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCameraComponent; }
 
+	virtual void Tick(float DeltaTime) override;
+
+	virtual FRotator GetViewRotation() const override;
+
+	virtual void BeginPlay() override;
+
+	UFUNCTION(BlueprintCallable, Category = Camera)
+		void ResetHMD();
 };
 
